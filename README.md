@@ -1,1 +1,1 @@
-LAB 2
+Basic ml pipeline using githib actions
