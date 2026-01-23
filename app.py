@@ -33,4 +33,8 @@ def predict(
 
     prediction = model.predict(features)
 
-    return {"predicted_wine_quality": float(prediction[0])}
+    return {
+        "name": "RALLAPALLI V S B HARSHITH",
+        "roll_no": "2022BCS0042",
+        "predicted_wine_quality": float(prediction[0])
+    }
