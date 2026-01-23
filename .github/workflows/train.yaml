@@ -91,10 +91,16 @@ jobs:
       - name: Run training
         run: |
           python train.py
-          # must create metrics.json and model file
+          # Must create outputs/results/metrics.json and outputs/results/model.pkl
 
       - name: Show metrics
-        run: cat outputs/results/metrics.json
+        run: |
+          if [ -f outputs/results/metrics.json ]; then
+            cat outputs/results/metrics.json
+          else
+            echo "ERROR: metrics.json not found!"
+            exit 1
+          fi
 
       - name: Extract metrics
         id: metrics
@@ -107,11 +113,11 @@ jobs:
         with:
           name: model-artifacts
           path: |
-            output/
+            outputs/results/
 
     outputs:
       mse: ${{ steps.metrics.outputs.MSE }}
-      r2:  ${{ steps.metrics.outputs.R2 }}
+      r2: ${{ steps.metrics.outputs.R2 }}
 
   # -----------------------
   # Job 2: DEPLOY (CD)
@@ -132,6 +138,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: model-artifacts
+          path: outputs/results/
 
       - name: Compare metrics
         id: compare
@@ -177,13 +184,10 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
             https://api.github.com/repos/${{ github.repository }}/actions/variables/BEST_MSE \
-            -d '{"name":"BEST_MSE","value":"${{ needs.train.outputs.mse }}"}'
+            -d '{"name":"BEST_MSE","value":"'"${{ needs.train.outputs.mse }}"'"}'
 
           curl -X PATCH \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
             https://api.github.com/repos/${{ github.repository }}/actions/variables/BEST_R2 \
-            -d '{"name":"BEST_R2","value":"${{ needs.train.outputs.r2 }}"}'
-
-
-
+            -d '{"name":"BEST_R2","value":"'"${{ needs.train.outputs.r2 }}"'"}'
