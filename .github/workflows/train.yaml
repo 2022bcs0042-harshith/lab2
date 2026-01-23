@@ -112,8 +112,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: model-artifacts
-          path: |
-            outputs/results/
+          path: outputs/results/
 
     outputs:
       mse: ${{ steps.metrics.outputs.MSE }}
@@ -168,11 +167,13 @@ jobs:
           exit 0
 
       - name: Login to Docker Hub
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
       - name: Build Docker image
         run: |
-          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ml-model:latest .
+          # Force BuildKit off to avoid buildx issues
+          DOCKER_BUILDKIT=0 docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ml-model:latest .
 
       - name: Push Docker image
         run: |
@@ -191,3 +192,4 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
             https://api.github.com/repos/${{ github.repository }}/actions/variables/BEST_R2 \
             -d '{"name":"BEST_R2","value":"'"${{ needs.train.outputs.r2 }}"'"}'
+
