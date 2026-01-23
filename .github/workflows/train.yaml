@@ -59,10 +59,6 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
-env:
-  STUDENT_NAME: "RALLAPALLI V S B HARSHITH"
-  ROLL_NO: "2022BCS0042"
-
 jobs:
   # -----------------------
   # Job 1: TRAIN (CI)
@@ -73,10 +69,6 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-
-      - name: Show Student Info
-        run: |
-          echo "Running workflow for $STUDENT_NAME, Roll No: $ROLL_NO"
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -91,17 +83,12 @@ jobs:
       - name: Run training
         run: |
           python train.py
-          # Must create outputs/results/metrics.json and outputs/results/model.pkl
+          # must create metrics.json and model file
 
       - name: Show metrics
-        run: |
-          if [ -f outputs/results/metrics.json ]; then
-            cat outputs/results/metrics.json
-          else
-            echo "ERROR: metrics.json not found!"
-            exit 1
-          fi
+        run: cat outputs/results/metrics.json
 
+      # Save metrics for next job
       - name: Extract metrics
         id: metrics
         run: |
@@ -112,11 +99,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: model-artifacts
-          path: outputs/results/
+          path: |
+            outputs/
 
     outputs:
       mse: ${{ steps.metrics.outputs.MSE }}
-      r2: ${{ steps.metrics.outputs.R2 }}
+      r2:  ${{ steps.metrics.outputs.R2 }}
 
   # -----------------------
   # Job 2: DEPLOY (CD)
@@ -129,15 +117,10 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Show Student Info
-        run: |
-          echo "Deploying workflow for $STUDENT_NAME, Roll No: $ROLL_NO"
-
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           name: model-artifacts
-          path: outputs/results/
 
       - name: Compare metrics
         id: compare
@@ -166,18 +149,20 @@ jobs:
           echo "${{ github.actor }} ---- Metric did not improve"
           exit 0
 
+      # -------- Docker Build & Push --------
+
       - name: Login to Docker Hub
-        run: |
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
       - name: Build Docker image
         run: |
-          # Force BuildKit off to avoid buildx issues
-          DOCKER_BUILDKIT=0 docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ml-model:latest .
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ml-model:latest .
 
       - name: Push Docker image
         run: |
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/ml-model:latest
+
+      # -------- Update GitHub Variables --------
 
       - name: Update BEST_MSE and BEST_R2
         run: |
@@ -185,11 +170,10 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
             https://api.github.com/repos/${{ github.repository }}/actions/variables/BEST_MSE \
-            -d '{"name":"BEST_MSE","value":"'"${{ needs.train.outputs.mse }}"'"}'
+            -d '{"name":"BEST_MSE","value":"${{ needs.train.outputs.mse }}"}'
 
           curl -X PATCH \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
             https://api.github.com/repos/${{ github.repository }}/actions/variables/BEST_R2 \
-            -d '{"name":"BEST_R2","value":"'"${{ needs.train.outputs.r2 }}"'"}'
-
+            -d '{"name":"BEST_R2","value":"${{ needs.train.outputs.r2 }}"}'
