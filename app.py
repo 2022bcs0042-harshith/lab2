@@ -5,7 +5,8 @@ import numpy as np
 app = FastAPI()
 
 # Load trained model
-model = joblib.load("model.pkl")
+model = joblib.load("outputs/model/model.pkl")
+
 
 @app.get("/")
 def home():
