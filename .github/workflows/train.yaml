@@ -52,36 +52,177 @@
 
 
 # for lab4 
-name: ML CI/CD Pipeline
+# name: ML CI/CD Pipeline
+
+# on:
+#   push:
+#     branches: ["main"]
+#   pull_request:
+#     branches: ["main"]
+
+# # --------------------------
+# # Global Environment Variables
+# # --------------------------
+# env:
+#   MODEL_DIR: outputs/model
+#   METRICS_DIR: outputs/results
+#   METRICS_FILE: outputs/results/metrics.json
+#   DOCKER_IMAGE: harsh994/wine-quality-api:latest
+
+# # ==========================
+# # Job 1: Train Model (CI)
+# # ==========================
+# jobs:
+#   train:
+#     name: Train Model
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+
+#       - name: Set up Python
+#         uses: actions/setup-python@v5
+#         with:
+#           python-version: "3.11"
+
+#       - name: Install dependencies
+#         run: |
+#           python -m pip install --upgrade pip
+#           pip install -r requirements.txt
+
+#       - name: Run training script
+#         run: |
+#           python train.py
+#           # Ensure metrics.json is generated in outputs/results/
+
+#       - name: Upload Model Artifact
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: trained-model
+#           path: ${{ env.MODEL_DIR }}/  # upload folder
+
+#       - name: Upload Metrics Artifact
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: evaluation-results
+#           path: ${{ env.METRICS_DIR }}/  # upload folder
+
+# # ==========================
+# # Job 2: Deploy Model (CD)
+# # ==========================
+#   deploy:
+#     name: Deploy Model
+#     runs-on: ubuntu-latest
+#     needs: train
+#     environment: production
+
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+
+#       - name: Download Model Artifact
+#         uses: actions/download-artifact@v4
+#         with:
+#           name: trained-model
+#           path: ${{ env.MODEL_DIR }}/  # download to folder
+
+#       - name: Download Metrics Artifact
+#         uses: actions/download-artifact@v4
+#         with:
+#           name: evaluation-results
+#           path: ${{ env.METRICS_DIR }}/  # download to folder
+
+#       # --------------------------
+#       # Compare Current Metric vs BEST_F1
+#       # --------------------------
+#       - name: Compare Metrics
+#         id: compare_metrics
+#         run: |
+#           METRIC=$(jq '.f1_score' ${{ env.METRICS_FILE }})
+#           BEST_METRIC=${{ vars.BEST_F1 }}
+#           echo "Current F1: $METRIC, Best F1: $BEST_METRIC"
+
+#           if (( $(echo "$METRIC > $BEST_METRIC" | bc -l) )); then
+#             echo "Metric improved!"
+#             echo "METRIC_IMPROVED=true" >> $GITHUB_ENV
+#             echo "CURRENT_METRIC=$METRIC" >> $GITHUB_ENV
+#           else
+#             echo "Roll_no: 2022BCS0042 ---- Metric did not improve"
+#             echo "METRIC_IMPROVED=false" >> $GITHUB_ENV
+#           fi
+
+#       # --------------------------
+#       # Log in to Docker Hub
+#       # --------------------------
+#       - name: Log in to Docker Hub
+#         if: env.METRIC_IMPROVED == 'true'
+#         uses: docker/login-action@v2
+#         with:
+#           username: ${{ secrets.DOCKERHUB_USERNAME }}
+#           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+#       # --------------------------
+#       # Build Docker Image
+#       # --------------------------
+#       - name: Build Docker Image
+#         if: env.METRIC_IMPROVED == 'true'
+#         run: |
+#           docker build -t ${{ env.DOCKER_IMAGE }} .
+
+#       # --------------------------
+#       # Push Docker Image
+#       # --------------------------
+#       - name: Push Docker Image
+#         if: env.METRIC_IMPROVED == 'true'
+#         run: |
+#           docker push ${{ env.DOCKER_IMAGE }}
+
+#       # --------------------------
+#       # Update BEST_F1 GitHub Variable
+#       # --------------------------
+#       - name: Update Best F1 GitHub Variable
+#         if: env.METRIC_IMPROVED == 'true'
+#         uses: actions/github-script@v6
+#         with:
+#           github-token: ${{ secrets.GH_PAT }}
+#           script: |
+#             await github.actions.updateRepoVariable({
+#               owner: context.repo.owner,
+#               repo: context.repo.repo,
+#               name: "BEST_F1",
+#               value: process.env.CURRENT_METRIC
+#             })
+
+
+name: ML Train & Deploy Pipeline
 
 on:
   push:
     branches: ["main"]
-  pull_request:
-    branches: ["main"]
-
-# --------------------------
-# Global Environment Variables
-# --------------------------
-env:
-  MODEL_DIR: outputs/model
-  METRICS_DIR: outputs/results
-  METRICS_FILE: outputs/results/metrics.json
-  DOCKER_IMAGE: harsh994/wine-quality-api:latest
+  workflow_dispatch:
 
 # ==========================
-# Job 1: Train Model (CI)
+# Global environment
+# ==========================
+env:
+  MODEL_DIR: output/model
+  METRICS_DIR: output
+  METRICS_FILE: output/metrics.json
+  DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/ml-model:latest
+
+# ==========================
+# Job 1: TRAIN (CI)
 # ==========================
 jobs:
   train:
-    name: Train Model
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -89,107 +230,113 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run training script
         run: |
           python train.py
-          # Ensure metrics.json is generated in outputs/results/
+          # Must generate model & metrics.json in output/
 
-      - name: Upload Model Artifact
+      - name: Show metrics
+        run: cat ${{ env.METRICS_FILE }}
+
+      - name: Extract metrics
+        id: metrics
+        run: |
+          echo "MSE=$(jq -r '."Mean Squared Error"' ${{ env.METRICS_FILE }})" >> $GITHUB_OUTPUT
+          echo "R2=$(jq -r '."R2 Score"' ${{ env.METRICS_FILE }})" >> $GITHUB_OUTPUT
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: trained-model
-          path: ${{ env.MODEL_DIR }}/  # upload folder
+          name: model-artifacts
+          path: output/
 
-      - name: Upload Metrics Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: evaluation-results
-          path: ${{ env.METRICS_DIR }}/  # upload folder
+    outputs:
+      mse: ${{ steps.metrics.outputs.MSE }}
+      r2: ${{ steps.metrics.outputs.R2 }}
 
 # ==========================
-# Job 2: Deploy Model (CD)
+# Job 2: DEPLOY (CD)
 # ==========================
   deploy:
-    name: Deploy Model
-    runs-on: ubuntu-latest
     needs: train
-    environment: production
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Download Model Artifact
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: trained-model
-          path: ${{ env.MODEL_DIR }}/  # download to folder
+          name: model-artifacts
 
-      - name: Download Metrics Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: evaluation-results
-          path: ${{ env.METRICS_DIR }}/  # download to folder
-
-      # --------------------------
-      # Compare Current Metric vs BEST_F1
-      # --------------------------
-      - name: Compare Metrics
-        id: compare_metrics
+      # -------------------------
+      # Compare metrics with BEST
+      # -------------------------
+      - name: Compare metrics
+        id: compare
         run: |
-          METRIC=$(jq '.f1_score' ${{ env.METRICS_FILE }})
-          BEST_METRIC=${{ vars.BEST_F1 }}
-          echo "Current F1: $METRIC, Best F1: $BEST_METRIC"
+          CUR_MSE=${{ needs.train.outputs.mse }}
+          CUR_R2=${{ needs.train.outputs.r2 }}
+          BEST_MSE=${{ vars.BEST_MSE }}
+          BEST_R2=${{ vars.BEST_R2 }}
 
-          if (( $(echo "$METRIC > $BEST_METRIC" | bc -l) )); then
-            echo "Metric improved!"
-            echo "METRIC_IMPROVED=true" >> $GITHUB_ENV
-            echo "CURRENT_METRIC=$METRIC" >> $GITHUB_ENV
+          echo "Current MSE: $CUR_MSE | Best MSE: $BEST_MSE"
+          echo "Current R2: $CUR_R2 | Best R2: $BEST_R2"
+
+          improve_mse=$(echo "$CUR_MSE < $BEST_MSE" | bc -l)
+          improve_r2=$(echo "$CUR_R2 > $BEST_R2" | bc -l)
+
+          if [ "$improve_mse" -eq 1 ] && [ "$improve_r2" -eq 1 ]; then
+            echo "improved=true" >> $GITHUB_OUTPUT
           else
-            echo "Roll_no: 2022BCS0042 ---- Metric did not improve"
-            echo "METRIC_IMPROVED=false" >> $GITHUB_ENV
+            echo "improved=false" >> $GITHUB_OUTPUT
           fi
 
-      # --------------------------
-      # Log in to Docker Hub
-      # --------------------------
-      - name: Log in to Docker Hub
-        if: env.METRIC_IMPROVED == 'true'
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Stop if no improvement
+        if: steps.compare.outputs.improved == 'false'
+        run: |
+          echo "${{ github.actor }} ---- Metrics did not improve"
+          exit 0
 
-      # --------------------------
-      # Build Docker Image
-      # --------------------------
-      - name: Build Docker Image
-        if: env.METRIC_IMPROVED == 'true'
+      # -------------------------
+      # Docker login, build & push
+      # -------------------------
+      - name: Login to Docker Hub
+        if: steps.compare.outputs.improved == 'true'
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+      - name: Build Docker image
+        if: steps.compare.outputs.improved == 'true'
         run: |
           docker build -t ${{ env.DOCKER_IMAGE }} .
 
-      # --------------------------
-      # Push Docker Image
-      # --------------------------
-      - name: Push Docker Image
-        if: env.METRIC_IMPROVED == 'true'
+      - name: Push Docker image
+        if: steps.compare.outputs.improved == 'true'
         run: |
           docker push ${{ env.DOCKER_IMAGE }}
 
-      # --------------------------
-      # Update BEST_F1 GitHub Variable
-      # --------------------------
-      - name: Update Best F1 GitHub Variable
-        if: env.METRIC_IMPROVED == 'true'
-        uses: actions/github-script@v6
-        with:
-          github-token: ${{ secrets.GH_PAT }}
-          script: |
-            await github.actions.updateRepoVariable({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              name: "BEST_F1",
-              value: process.env.CURRENT_METRIC
-            })
+      # -------------------------
+      # Update GitHub Variables
+      # -------------------------
+      - name: Update BEST_MSE
+        if: steps.compare.outputs.improved == 'true'
+        run: |
+          curl -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/variables/BEST_MSE \
+            -d "{\"name\":\"BEST_MSE\",\"value\":\"${{ needs.train.outputs.mse }}\"}"
+
+      - name: Update BEST_R2
+        if: steps.compare.outputs.improved == 'true'
+        run: |
+          curl -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.GH_PAT }}" \
+            https://api.github.com/repos/${{ github.repository }}/actions/variables/BEST_R2 \
+            -d "{\"name\":\"BEST_R2\",\"value\":\"${{ needs.train.outputs.r2 }}\"}"
+
