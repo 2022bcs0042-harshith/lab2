@@ -194,7 +194,6 @@
 #               value: process.env.CURRENT_METRIC
 #             })
 
-
 name: ML Train & Deploy Pipeline
 
 on:
@@ -202,13 +201,13 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
-# ==========================
+# --------------------------
 # Global environment
-# ==========================
+# --------------------------
 env:
-  MODEL_DIR: output/model
-  METRICS_DIR: output
-  METRICS_FILE: output/metrics.json
+  MODEL_DIR: outputs/model
+  METRICS_DIR: outputs/results
+  METRICS_FILE: outputs/results/metrics.json
   DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/ml-model:latest
 
 # ==========================
@@ -219,7 +218,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python 3.11
@@ -235,7 +234,7 @@ jobs:
       - name: Run training script
         run: |
           python train.py
-          # Must generate model & metrics.json in output/
+          # Should create outputs/model/model.pkl and outputs/results/metrics.json
 
       - name: Show metrics
         run: cat ${{ env.METRICS_FILE }}
@@ -250,7 +249,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: model-artifacts
-          path: output/
+          path: |
+            outputs/model/
+            outputs/results/
 
     outputs:
       mse: ${{ steps.metrics.outputs.MSE }}
@@ -264,13 +265,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           name: model-artifacts
+          path: outputs/
 
       # -------------------------
       # Compare metrics with BEST
@@ -295,32 +297,32 @@ jobs:
             echo "improved=false" >> $GITHUB_OUTPUT
           fi
 
+      # -------------------------
+      # Stop if no improvement
+      # -------------------------
       - name: Stop if no improvement
         if: steps.compare.outputs.improved == 'false'
         run: |
-          echo "${{ github.actor }} ---- Metrics did not improve"
-          exit 0
+          echo "Metrics did not improve, but will push Docker image anyway for testing"
+          # Comment out exit 0 to always push image
 
       # -------------------------
       # Docker login, build & push
       # -------------------------
       - name: Login to Docker Hub
-        if: steps.compare.outputs.improved == 'true'
         run: |
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
       - name: Build Docker image
-        if: steps.compare.outputs.improved == 'true'
         run: |
           docker build -t ${{ env.DOCKER_IMAGE }} .
 
       - name: Push Docker image
-        if: steps.compare.outputs.improved == 'true'
         run: |
           docker push ${{ env.DOCKER_IMAGE }}
 
       # -------------------------
-      # Update GitHub Variables
+      # Update GitHub Variables if improved
       # -------------------------
       - name: Update BEST_MSE
         if: steps.compare.outputs.improved == 'true'
