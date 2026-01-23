@@ -67,7 +67,7 @@ env:
   MODEL_DIR: outputs/model
   METRICS_DIR: outputs/results
   METRICS_FILE: outputs/results/metrics.json
-  DOCKER_IMAGE: yourdockerhubusername/wine-quality-api:latest
+  DOCKER_IMAGE: harsh994/wine-quality-api:latest
 
 # ==========================
 # Job 1: Train Model (CI)
