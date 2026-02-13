@@ -1,80 +1,52 @@
 pipeline {
     agent any
 
-    environment {
-        IMAGE_NAME = "harsh994/2022bcs0042-jenkins"
-        DOCKER_CREDS = credentials('dockerhub-creds')
-    }
-
     stages {
 
-        stage('Clone Repository') {
+        stage('Print Student Info') {
             steps {
-                git branch: 'main',
-                url: 'https://github.com/2022bcs0042-harshith/lab2.git'
+                sh '''
+                echo "======================================"
+                echo "Name: RALLAPALLI V S B HARSHITH"
+                echo "Roll No: 2022BCS0042"
+                echo "======================================"
+                '''
+            }
+        }
+
+        stage('Create Virtual Environment') {
+            steps {
+                sh 'python3 -m venv venv'
             }
         }
 
         stage('Install Dependencies') {
             steps {
                 sh '''
-                python3 -m venv venv
-                . venv/bin/activate
-                pip install --upgrade pip
-                pip install -r requirements.txt
+                ./venv/bin/pip install --upgrade pip
+                ./venv/bin/pip install -r requirements.txt
                 '''
             }
         }
 
-        stage('Train Model') {
+        stage('Run Training Script') {
             steps {
                 sh '''
-                . venv/bin/activate
-                python train.py
+                ./venv/bin/python train.py
                 '''
             }
         }
 
-        stage('Print Metrics with Student Details') {
+        stage('Print Completion Message') {
             steps {
                 sh '''
-                echo "=================================="
-                echo "Model Evaluation Results"
-                echo "Name      : R V S B HARSHITH"
-                echo "Roll No   : 2022BCS0042"
-                echo "=================================="
-
-                if [ -f outputs/metrics.txt ]; then
-                    cat outputs/metrics.txt
-                else
-                    echo "Metrics file not found!"
-                fi
+                echo "======================================"
+                echo "Model training completed successfully!"
+                echo "Name: RALLAPALLI V S B HARSHITH"
+                echo "Roll No: 2022BCS0042"
+                echo "======================================"
                 '''
             }
-        }
-
-        stage('Build Docker Image') {
-            steps {
-                sh 'docker build -t $IMAGE_NAME:latest .'
-            }
-        }
-
-        stage('Push to DockerHub') {
-            steps {
-                sh '''
-                echo $DOCKER_CREDS_PSW | docker login -u $DOCKER_CREDS_USR --password-stdin
-                docker push $IMAGE_NAME:latest
-                '''
-            }
-        }
-    }
-
-    post {
-        success {
-            echo "Pipeline executed successfully!"
-        }
-        failure {
-            echo "Pipeline failed!"
         }
     }
 }
