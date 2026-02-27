@@ -57,7 +57,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "harsh994/ml-model:latest"
+        IMAGE_NAME = "ml-model-local"
         CONTAINER_NAME = "ml-test-container"
         PORT = "8000"
     }
@@ -75,18 +75,22 @@ pipeline {
             }
         }
 
-        stage('Pull Docker Image') {
+        stage('Build Docker Image') {
             steps {
-                sh "docker pull ${IMAGE_NAME}"
+                sh '''
+                echo "Building Docker Image..."
+                docker build -t ${IMAGE_NAME} .
+                '''
             }
         }
 
         stage('Run Container') {
             steps {
-                sh """
+                sh '''
+                echo "Starting Container..."
                 docker run -d -p ${PORT}:8000 \
                 --name ${CONTAINER_NAME} ${IMAGE_NAME}
-                """
+                '''
             }
         }
 
@@ -99,6 +103,7 @@ pipeline {
                                 script: "curl -s -o /dev/null -w '%{http_code}' http://localhost:${PORT}/health",
                                 returnStdout: true
                             ).trim()
+                            echo "Health Check Status: ${status}"
                             return (status == "200")
                         }
                     }
@@ -116,7 +121,7 @@ pipeline {
 
                     echo "Valid API Response: ${response}"
 
-                    if (!response.contains("prediction")) {
+                    if (!response.contains("predicted_wine_quality")) {
                         error("Prediction field missing in valid response!")
                     }
                 }
@@ -142,8 +147,10 @@ pipeline {
 
         stage('Stop Container') {
             steps {
-                sh "docker stop ${CONTAINER_NAME} || true"
-                sh "docker rm ${CONTAINER_NAME} || true"
+                sh '''
+                docker stop ${CONTAINER_NAME} || true
+                docker rm ${CONTAINER_NAME} || true
+                '''
             }
         }
 
@@ -156,8 +163,10 @@ pipeline {
 
     post {
         always {
-            sh "docker stop ${CONTAINER_NAME} || true"
-            sh "docker rm ${CONTAINER_NAME} || true"
+            sh '''
+            docker stop ${CONTAINER_NAME} || true
+            docker rm ${CONTAINER_NAME} || true
+            '''
         }
 
         success {
