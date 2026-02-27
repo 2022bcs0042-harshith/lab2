@@ -462,22 +462,26 @@ pipeline {
             }
         }
 
-        stage('Wait for API Readiness') {
-            steps {
-                script {
-                    timeout(time: 60, unit: 'SECONDS') {
-                        waitUntil {
-                            def status = sh(
-                                script: "curl -s -o /dev/null -w '%{http_code}' http://host.docker.internal:8000/health",
-                                returnStdout: true
-                            ).trim()
-                            echo "Health Check Status: ${status}"
-                            return (status == "200")
-                        }
-                    }
+       stage('Wait for API Readiness') {
+    steps {
+        script {
+            // Wait 10 seconds for FastAPI to start
+            sleep(time: 10, unit: 'SECONDS')
+
+            timeout(time: 60, unit: 'SECONDS') {
+                waitUntil {
+                    def status = sh(
+                        script: "curl -s -o /dev/null -w \"%{http_code}\" http://host.docker.internal:8000/health",
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Health Check Status: ${status}"
+                    return (status == "200")
                 }
             }
         }
+    }
+}
 
         stage('Send Valid Inference Request') {
             steps {
