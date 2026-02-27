@@ -57,7 +57,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "ml-model-local"
+        IMAGE_NAME = "ml-model"
         CONTAINER_NAME = "ml-test-container"
         PORT = "8000"
     }
