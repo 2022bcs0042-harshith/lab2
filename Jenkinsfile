@@ -183,6 +183,136 @@
 //     }
 // }
 
+// pipeline {
+//     agent any
+
+//     environment {
+//         IMAGE_NAME = "ml-model"
+//         CONTAINER_NAME = "ml-test-container"
+//         PORT = "8000"
+//     }
+
+//     stages {
+
+//         stage('Print Student Info') {
+//             steps {
+//                 sh '''
+//                 echo "======================================"
+//                 echo "Name: RALLAPALLI V S B HARSHITH"
+//                 echo "Roll No: 2022BCS0042"
+//                 echo "======================================"
+//                 '''
+//             }
+//         }
+
+//         stage('Cleanup Old Container') {
+//             steps {
+//                 sh '''
+//                 docker stop ${CONTAINER_NAME} || true
+//                 docker rm ${CONTAINER_NAME} || true
+//                 '''
+//             }
+//         }
+
+//         stage('Run Container') {
+//             steps {
+//                 sh '''
+//                 echo "Starting Container from existing image..."
+//                 docker run -d -p ${PORT}:8000 \
+//                 --name ${CONTAINER_NAME} ${IMAGE_NAME}
+//                 '''
+//             }
+//         }
+
+//         stage('Wait for API Readiness') {
+//             steps {
+//                 script {
+//                     timeout(time: 60, unit: 'SECONDS') {
+//                         waitUntil {
+//                             def status = sh(
+//                                 script: "curl -s -o /dev/null -w '%{http_code}' http://localhost:${PORT}/health",
+//                                 returnStdout: true
+//                             ).trim()
+//                             echo "Health Check Status: ${status}"
+//                             return (status == "200")
+//                         }
+//                     }
+//                 }
+//             }
+//         }
+
+//         stage('Send Valid Inference Request') {
+//             steps {
+//                 script {
+//                     def response = sh(
+//                         script: "curl -s -X POST http://localhost:${PORT}/predict -H 'Content-Type: application/json' -d @valid_input.json",
+//                         returnStdout: true
+//                     ).trim()
+
+//                     echo "Valid API Response: ${response}"
+
+//                     if (!response.contains("predicted_wine_quality")) {
+//                         error("Prediction field missing in valid response!")
+//                     }
+//                 }
+//             }
+//         }
+
+//         stage('Send Invalid Request') {
+//             steps {
+//                 script {
+//                     def status = sh(
+//                         script: "curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:${PORT}/predict -H 'Content-Type: application/json' -d @invalid_input.json",
+//                         returnStdout: true
+//                     ).trim()
+
+//                     echo "Invalid Request Status Code: ${status}"
+
+//                     if (status == "200") {
+//                         error("Invalid input incorrectly returned 200!")
+//                     }
+//                 }
+//             }
+//         }
+
+//         stage('Stop Container') {
+//             steps {
+//                 sh '''
+//                 docker stop ${CONTAINER_NAME} || true
+//                 docker rm ${CONTAINER_NAME} || true
+//                 '''
+//             }
+//         }
+
+//         stage('Final Result') {
+//             steps {
+//                 echo "All validations passed successfully!"
+//             }
+//         }
+//     }
+
+//     post {
+//         always {
+//             sh '''
+//             docker stop ${CONTAINER_NAME} || true
+//             docker rm ${CONTAINER_NAME} || true
+//             '''
+//         }
+
+//         success {
+//             echo "======================================"
+//             echo "PIPELINE PASSED"
+//             echo "======================================"
+//         }
+
+//         failure {
+//             echo "======================================"
+//             echo "PIPELINE FAILED"
+//             echo "======================================"
+//         }
+//     }
+// }
+
 pipeline {
     agent any
 
@@ -217,9 +347,10 @@ pipeline {
         stage('Run Container') {
             steps {
                 sh '''
-                echo "Starting Container from existing image..."
-                docker run -d -p ${PORT}:8000 \
-                --name ${CONTAINER_NAME} ${IMAGE_NAME}
+                echo "Starting Container..."
+                docker run -d \
+                --name ${CONTAINER_NAME} \
+                ${IMAGE_NAME}
                 '''
             }
         }
@@ -230,7 +361,7 @@ pipeline {
                     timeout(time: 60, unit: 'SECONDS') {
                         waitUntil {
                             def status = sh(
-                                script: "curl -s -o /dev/null -w '%{http_code}' http://localhost:${PORT}/health",
+                                script: "curl -s -o /dev/null -w '%{http_code}' http://${CONTAINER_NAME}:8000/health",
                                 returnStdout: true
                             ).trim()
                             echo "Health Check Status: ${status}"
@@ -245,7 +376,7 @@ pipeline {
             steps {
                 script {
                     def response = sh(
-                        script: "curl -s -X POST http://localhost:${PORT}/predict -H 'Content-Type: application/json' -d @valid_input.json",
+                        script: "curl -s -X POST http://${CONTAINER_NAME}:8000/predict -H 'Content-Type: application/json' -d @valid_input.json",
                         returnStdout: true
                     ).trim()
 
@@ -262,7 +393,7 @@ pipeline {
             steps {
                 script {
                     def status = sh(
-                        script: "curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:${PORT}/predict -H 'Content-Type: application/json' -d @invalid_input.json",
+                        script: "curl -s -o /dev/null -w '%{http_code}' -X POST http://${CONTAINER_NAME}:8000/predict -H 'Content-Type: application/json' -d @invalid_input.json",
                         returnStdout: true
                     ).trim()
 
