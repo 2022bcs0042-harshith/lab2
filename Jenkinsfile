@@ -57,7 +57,7 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "yourdockerhubusername/your-ml-image:latest"
+        IMAGE_NAME = "harsh994/ml-model:latest"
         CONTAINER_NAME = "ml-test-container"
         PORT = "8000"
     }
