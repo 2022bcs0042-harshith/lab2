@@ -344,16 +344,29 @@ pipeline {
             }
         }
 
+        // stage('Run Container') {
+        //     steps {
+        //         sh '''
+        //         docker run -d \
+        //         --network host \
+        //         --name ${CONTAINER_NAME} \
+        //         ${IMAGE_NAME}
+        //         '''
+        //     }
+        // }
         stage('Run Container') {
-            steps {
-                sh '''
-                docker run -d \
-                --network host \
-                --name ${CONTAINER_NAME} \
-                ${IMAGE_NAME}
-                '''
-            }
-        }
+    steps {
+        sh '''
+        docker stop ${CONTAINER_NAME} || true
+        docker rm ${CONTAINER_NAME} || true
+
+        docker run -d \
+        -p ${PORT}:8000 \
+        --name ${CONTAINER_NAME} \
+        ${IMAGE_NAME}
+        '''
+    }
+}
 
         stage('Wait for API Readiness') {
             steps {
